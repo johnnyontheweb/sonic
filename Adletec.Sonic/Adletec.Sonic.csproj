@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard1.6</TargetFramework>
+    <TargetFrameworks>net471;netstandard1.6</TargetFrameworks>
     <Title>adletec sonic</Title>
     <PackageId>Adletec.Sonic</PackageId>
     <PackageVersion>1.2.0</PackageVersion>
