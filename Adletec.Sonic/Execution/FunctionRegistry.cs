@@ -3,15 +3,18 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Adletec.Sonic.Util;
 
 namespace Adletec.Sonic.Execution
 {
     public class FunctionRegistry : IFunctionRegistry
+
     {
         private const string DynamicFuncName = "Adletec.Sonic.DynamicFunc";
 
         private readonly Dictionary<string, FunctionInfo> functions;
         private readonly bool guardedMode;
+        private readonly bool caseSensitive;
 
         public FunctionRegistry(bool caseSensitive, bool guardedMode)
         {
@@ -20,6 +23,7 @@ namespace Adletec.Sonic.Execution
                 : new Dictionary<string, FunctionInfo>(StringComparer.OrdinalIgnoreCase);
 
             this.guardedMode = guardedMode;
+            this.caseSensitive = caseSensitive;
         }
 
         public IEnumerator<FunctionInfo> GetEnumerator()
@@ -106,7 +110,16 @@ namespace Adletec.Sonic.Execution
             if (string.IsNullOrEmpty(functionName))
                 throw new ArgumentNullException(nameof(functionName));
 
-            return functions.ContainsKey(functionName);
+            return functions.ContainsKey(ConvertFunctionName(functionName));
+        }
+        private string ConvertFunctionName(string functionName)
+        {
+            return caseSensitive ? functionName : functionName.ToLowerFast();
+        }
+
+        bool IFunctionRegistry.caseSensitive()
+        {
+            return caseSensitive;
         }
     }
 }

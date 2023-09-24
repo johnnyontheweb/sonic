@@ -373,11 +373,12 @@ namespace Adletec.Sonic.Execution
         {
             public static double GetVariableValueOrThrow(string variableName, FormulaContext context)
             {
-                if (context.Variables.TryGetValue(variableName, out double result))
+                if (context.Variables.TryGetValue(context.FunctionRegistry.caseSensitive() ? variableName : variableName.ToLowerFast(), out double result))
                     return result;
-                if (context.Variables.TryGetValue(variableName.ToLower(), out double resultL))
-                    return resultL;
-                throw new VariableNotDefinedException($"The variable \"{variableName}\" used is not defined.");
+                else if (context.ConstantRegistry.IsConstantName(variableName))
+                    return context.ConstantRegistry.GetConstantInfo(variableName).Value;
+                else
+                    throw new VariableNotDefinedException($"The variable \"{variableName}\" used is not defined.");
             }
         }
     }
