@@ -2,8 +2,9 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using Adletec.Sonic.Parsing.Tokenizing;
 
-namespace Adletec.Sonic.Tokenizer
+namespace Adletec.Sonic.Parsing
 {
     /// <summary>
     /// A token reader that converts the input string in a list of tokens.
@@ -14,32 +15,47 @@ namespace Adletec.Sonic.Tokenizer
         private readonly char decimalSeparator;
         private readonly char argumentSeparator;
 
+        /// <summary>
+        /// Default constructor. Uses the InvariantCulture and ',' as argument separator.
+        /// </summary>
         public TokenReader() 
-            : this(CultureInfo.CurrentCulture)
+            : this(CultureInfo.InvariantCulture, ',')
         {
-        }
-
-        public TokenReader(CultureInfo cultureInfo)
-        {
-            this.cultureInfo = cultureInfo;
-            this.decimalSeparator = cultureInfo.NumberFormat.NumberDecimalSeparator[0];
-            this.argumentSeparator = cultureInfo.TextInfo.ListSeparator[0];
         }
 
         /// <summary>
-        /// Read in the provided formula and convert it into a list of tokens that can be processed by the
+        /// Constructor
+        /// </summary>
+        /// <param name="cultureInfo">The culture info to use for parsing the floating point numbers.</param>
+        /// <param name="argumentSeparator">The argument separator to use for functions.</param>
+        /// <exception cref="ArgumentException">Thrown when the argument separator is the same as the decimal separator.</exception>
+        public TokenReader(CultureInfo cultureInfo, char argumentSeparator)
+        {
+            this.cultureInfo = cultureInfo;
+            this.decimalSeparator = cultureInfo.NumberFormat.NumberDecimalSeparator[0];
+            this.argumentSeparator = argumentSeparator;
+            
+            if (cultureInfo.NumberFormat.NumberDecimalSeparator.ToCharArray(0, 1)[0] == argumentSeparator)
+            {
+                throw new ArgumentException(nameof(argumentSeparator) + " cannot be the same as " +
+                                            nameof(cultureInfo.NumberFormat.NumberDecimalSeparator), nameof(argumentSeparator));
+            }
+        }
+
+        /// <summary>
+        /// Read in the provided expression and convert it into a list of tokens that can be processed by the
         /// Abstract Syntax Tree Builder.
         /// </summary>
-        /// <param name="formula">The formula that must be converted into a list of tokens.</param>
-        /// <returns>The list of tokens for the provided formula.</returns>
-        public List<Token> Read(string formula)
+        /// <param name="expression">The expression to be converted into a list of tokens.</param>
+        /// <returns>The list of tokens for the provided expression.</returns>
+        public List<Token> Read(string expression)
         {
-            if (string.IsNullOrEmpty(formula))
-                throw new ArgumentNullException(nameof(formula));
+            if (string.IsNullOrEmpty(expression))
+                throw new ArgumentNullException(nameof(expression));
 
             var tokens = new List<Token>();
 
-            var characters = formula.ToCharArray();
+            var characters = expression.ToCharArray();
 
             var isFormulaSubPart = true;
             var isScientific = false;
@@ -48,6 +64,12 @@ namespace Adletec.Sonic.Tokenizer
             {
                 if (IsPartOfNumeric(characters[i], true, false, isFormulaSubPart))
                 {
+                    if (characters[i] == '-')
+                    {
+                        tokens.Add(new Token { TokenType = TokenType.Operation, Value = '_', StartPosition = i, Length = 1 });
+                        continue;
+                    }
+                    
                     var buffer = new StringBuilder();
                     buffer.Append(characters[i]);
                     var startPosition = i;
@@ -56,7 +78,7 @@ namespace Adletec.Sonic.Tokenizer
                     while (++i < characters.Length && IsPartOfNumeric(characters[i], false, characters[i-1] == '-', isFormulaSubPart))
                     {
                         if (isScientific && IsScientificNotation(characters[i]))
-                            throw new ParseException($"Invalid token \"{characters[i]}\" detected at position {i}.");
+                            throw new InvalidTokenParseException($"Invalid token \"{characters[i]}\" detected at position {i}.", expression, i, characters[i].ToString());
 
                         if (IsScientificNotation(characters[i]))
                         {
@@ -79,12 +101,7 @@ namespace Adletec.Sonic.Tokenizer
                     }
                     else
                     {
-                        if (buffer.ToString() == "-")
-                        {
-                            // Verify if we have a unary minus, we use the token '_' for a unary minus in the AST builder
-                            tokens.Add(new Token { TokenType = TokenType.Operation, Value = '_', StartPosition = startPosition, Length = 1 });
-                        }
-                        else if (double.TryParse(buffer.ToString(), NumberStyles.Float | NumberStyles.AllowThousands,
+                        if (double.TryParse(buffer.ToString(), NumberStyles.Float | NumberStyles.AllowThousands,
                             cultureInfo, out var doubleValue))
                         {
                             tokens.Add(new Token { TokenType = TokenType.FloatingPoint, Value = doubleValue, StartPosition = startPosition, Length = i - startPosition });
@@ -93,7 +110,8 @@ namespace Adletec.Sonic.Tokenizer
                         }
                         else
                         {
-                            throw new ParseException($"Invalid floating point number: {buffer}");
+                            throw new InvalidFloatingPointNumberParseException($"Invalid floating point number: {buffer}",
+                                expression, startPosition, buffer.ToString());
                         }
                     }
 
@@ -104,24 +122,42 @@ namespace Adletec.Sonic.Tokenizer
                     }
                 }
 
-                if (IsPartOfVariable(characters[i], true))
+                if (IsPartOfTextToken(characters[i], true))
                 {
                     var buffer = "" + characters[i];
                     var startPosition = i;
 
-                    while (++i < characters.Length && IsPartOfVariable(characters[i], false))
+                    var nextCharIndex = i + 1;
+                    while (nextCharIndex < characters.Length && IsPartOfTextToken(characters[nextCharIndex], false))
                     {
-                        buffer += characters[i];
+                        buffer += characters[++i];
+                        nextCharIndex = i + 1;
                     }
 
-                    tokens.Add(new Token { TokenType = TokenType.Text, Value = buffer, StartPosition = startPosition, Length = i -startPosition });
-                    isFormulaSubPart = false;
+                    // exclusive end (the first char after the token)
+                    var textTokenEnd = nextCharIndex;
 
-                    if (i == characters.Length)
+                    // Find next non-whitespace character index, so we can check if it is an opening parenthesis
+                    // which would make our text token to a function.
+                    while (characters.Length > nextCharIndex && char.IsWhiteSpace(characters[nextCharIndex]))
                     {
-                        // Last character read
+                        nextCharIndex++;
+                    }
+                    
+                    if (characters.Length > nextCharIndex && characters[nextCharIndex] == '(')
+                    {
+                        // We know the next token already, so we can process it and set the index accordingly
+                        i = nextCharIndex;
+                        tokens.Add(new Token { TokenType = TokenType.Function, Value = buffer, StartPosition = startPosition, Length = textTokenEnd - startPosition });
+                        tokens.Add(new Token { TokenType = TokenType.LeftParenthesis, Value = '(', StartPosition = i, Length = 1 });
+                        isFormulaSubPart = true;
                         continue;
                     }
+
+                    tokens.Add(new Token { TokenType = TokenType.Symbol, Value = buffer, StartPosition = startPosition, Length = textTokenEnd - startPosition });
+                    isFormulaSubPart = false;
+
+                    continue;
                 }
                 if (characters[i] == this.argumentSeparator)
                 {
@@ -135,7 +171,6 @@ namespace Adletec.Sonic.Tokenizer
                         case ' ':
                             continue;
                         case '+':
-                        case '-':
                         case '*':
                         case '/':
                         case '^':
@@ -143,6 +178,10 @@ namespace Adletec.Sonic.Tokenizer
                         case '≤':
                         case '≥':
                         case '≠':
+                            tokens.Add(new Token { TokenType = TokenType.Operation, Value = characters[i], StartPosition = i, Length = 1 });                            
+                            isFormulaSubPart = true;
+                            break;
+                        case '-':
                             if (IsUnaryMinus(characters[i], tokens))
                             {
                                 // We use the token '_' for a unary minus in the AST builder
@@ -155,11 +194,11 @@ namespace Adletec.Sonic.Tokenizer
                             isFormulaSubPart = true;
                             break;
                         case '(':
-                            tokens.Add(new Token { TokenType = TokenType.LeftBracket, Value = characters[i], StartPosition = i, Length = 1 });
+                            tokens.Add(new Token { TokenType = TokenType.LeftParenthesis, Value = characters[i], StartPosition = i, Length = 1 });
                             isFormulaSubPart = true;
                             break;
                         case ')':
-                            tokens.Add(new Token { TokenType = TokenType.RightBracket, Value = characters[i], StartPosition = i, Length = 1 });
+                            tokens.Add(new Token { TokenType = TokenType.RightParenthesis, Value = characters[i], StartPosition = i, Length = 1 });
                             isFormulaSubPart = false;
                             break;
                         case '<':
@@ -183,7 +222,7 @@ namespace Adletec.Sonic.Tokenizer
                                 isFormulaSubPart = false;
                             }
                             else
-                                throw new ParseException($"Invalid token \"{characters[i]}\" detected at position {i}.");
+                                throw new InvalidTokenParseException($"Invalid token \"{characters[i]}\" detected at position {i}.", expression, i, characters[i].ToString());
                             break;
                         case '&':
                             if (i + 1 < characters.Length && characters[i + 1] == '&')
@@ -192,7 +231,7 @@ namespace Adletec.Sonic.Tokenizer
                                 isFormulaSubPart = false;
                             }
                             else
-                                throw new ParseException($"Invalid token \"{characters[i]}\" detected at position {i}.");
+                                throw new InvalidTokenParseException($"Invalid token \"{characters[i]}\" detected at position {i}.", expression, i, characters[i].ToString());
                             break;
                         case '|':
                             if (i + 1 < characters.Length && characters[i + 1] == '|')
@@ -201,7 +240,7 @@ namespace Adletec.Sonic.Tokenizer
                                 isFormulaSubPart = false;
                             }
                             else
-                                throw new ParseException($"Invalid token \"{characters[i]}\" detected at position {i}.");
+                                throw new InvalidTokenParseException($"Invalid token \"{characters[i]}\" detected at position {i}.", expression, i, characters[i].ToString());
                             break;
                         case '=':
                             if (i + 1 < characters.Length && characters[i + 1] == '=')
@@ -210,10 +249,10 @@ namespace Adletec.Sonic.Tokenizer
                                 isFormulaSubPart = false;
                             }
                             else
-                                throw new ParseException($"Invalid token \"{characters[i]}\" detected at position {i}.");
+                                throw new InvalidTokenParseException($"Invalid token \"{characters[i]}\" detected at position {i}.", expression, i, characters[i].ToString());
                             break;
                         default:
-                            throw new ParseException($"Invalid token \"{characters[i]}\" detected at position {i}.");
+                            throw new InvalidTokenParseException($"Invalid token \"{characters[i]}\" detected at position {i}.", expression, i, characters[i].ToString());
                     }
                 }
             }
@@ -226,7 +265,7 @@ namespace Adletec.Sonic.Tokenizer
             return character == decimalSeparator || (character >= '0' && character <= '9') || (isFormulaSubPart && isFirstCharacter && character == '-') || (!isFirstCharacter && !afterMinus && character == 'e') || (!isFirstCharacter && character == 'E');
         }
 
-        private bool IsPartOfVariable(char character, bool isFirstCharacter)
+        private bool IsPartOfTextToken(char character, bool isFirstCharacter)
         {
             return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (!isFirstCharacter && character >= '0' && character <= '9') || (!isFirstCharacter && character == '_');
         }
@@ -236,10 +275,11 @@ namespace Adletec.Sonic.Tokenizer
             if (currentToken != '-') return false;
             var previousToken = tokens[tokens.Count - 1];
 
+            // can't be function since function is _always_ directly followed by a left parenthesis
             return !(previousToken.TokenType == TokenType.FloatingPoint ||
                      previousToken.TokenType == TokenType.Integer ||
-                     previousToken.TokenType == TokenType.Text ||
-                     previousToken.TokenType == TokenType.RightBracket);
+                     previousToken.TokenType == TokenType.Symbol ||
+                     previousToken.TokenType == TokenType.RightParenthesis);
 
         }
 
