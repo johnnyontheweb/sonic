@@ -93,8 +93,8 @@ namespace Adletec.Sonic.Execution
             if (operation.GetType() == typeof(Variable))
             {
                 var variable = (Variable)operation;
-
-                var variableFound = variables.TryGetValue(variable.Name, out var value);
+                
+                var variableFound = variables.TryGetValue(caseSensitive ? variable.Name : variable.Name.ToLowerFast(), out var value);
 
                 if (variableFound)
                     return value;
