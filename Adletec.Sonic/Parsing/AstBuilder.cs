@@ -289,7 +289,7 @@ namespace Adletec.Sonic.Parsing
 
             var operations = new List<Operation>();
             for (var i = 0; i < actualParameterCount; i++)
-                operations.Add(resultStack.Pop());
+                if (resultStack.Count > 0) operations.Add(resultStack.Pop());
             operations.Reverse();
 
             return new Function(DataType.FloatingPoint, functionName, operations, functionInfo.IsIdempotent);
