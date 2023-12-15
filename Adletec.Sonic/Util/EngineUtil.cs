@@ -21,6 +21,12 @@ namespace Adletec.Sonic.Util
             return temp;
         }
 
+        //internal static IDictionary<string, double> ConvertVariableNamesToLowerCase(IDictionary<string, double> variables)
+        //{
+        //    return new Dictionary<string, double>(variables, StringComparer.OrdinalIgnoreCase);
+        //}
+
+
         // This is a fast ToLower for strings that are in ASCII
         static internal string ToLowerFast(this string text)
         {

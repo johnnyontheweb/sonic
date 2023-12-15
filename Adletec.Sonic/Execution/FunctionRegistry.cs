@@ -110,16 +110,17 @@ namespace Adletec.Sonic.Execution
             if (string.IsNullOrEmpty(functionName))
                 throw new ArgumentNullException(nameof(functionName));
 
-            return functions.ContainsKey(ConvertFunctionName(functionName));
+            return functions.ContainsKey(functionName);
         }
-        private string ConvertFunctionName(string functionName)
-        {
-            return caseSensitive ? functionName : functionName.ToLowerFast();
-        }
+        //private string ConvertFunctionName(string functionName)
+        //{
+        //    //return caseSensitive ? functionName : functionName.ToLowerFast();
+        //    return functionName;
+        //}
 
-        bool IFunctionRegistry.caseSensitive()
-        {
-            return caseSensitive;
-        }
+        //bool IFunctionRegistry.caseSensitive()
+        //{
+        //    return caseSensitive;
+        //}
     }
 }

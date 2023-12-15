@@ -373,7 +373,8 @@ namespace Adletec.Sonic.Execution
         {
             public static double GetVariableValueOrThrow(string variableName, FormulaContext context)
             {
-                if (context.Variables.TryGetValue(context.FunctionRegistry.caseSensitive() ? variableName : variableName.ToLowerFast(), out double result))
+                //if (context.Variables.TryGetValue(context.FunctionRegistry.caseSensitive() ? variableName : variableName.ToLowerFast(), out double result))
+                if (context.Variables.TryGetValue(variableName, out double result))
                     return result;
                 else if (context.ConstantRegistry.IsConstantName(variableName))
                     return context.ConstantRegistry.GetConstantInfo(variableName).Value;

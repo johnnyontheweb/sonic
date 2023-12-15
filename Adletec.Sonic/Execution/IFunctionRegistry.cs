@@ -7,7 +7,7 @@ namespace Adletec.Sonic.Execution
     {
         FunctionInfo GetFunctionInfo(string functionName);
         bool IsFunctionName(string functionName);
-        bool caseSensitive();
+        //bool caseSensitive();
         void RegisterFunction(string functionName, Delegate function);
         void RegisterFunction(string functionName, Delegate function, bool isIdempotent);
     }
