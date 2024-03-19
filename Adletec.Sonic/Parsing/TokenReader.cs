@@ -308,7 +308,11 @@ namespace Adletec.Sonic.Parsing
 
         private bool IsPartOfTextToken(char character, bool isFirstCharacter)
         {
-            return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (!isFirstCharacter && character >= '0' && character <= '9') || (!isFirstCharacter && character == '_');
+            return (character >= 'a' && character <= 'z') || 
+                   (character >= 'A' && character <= 'Z') || 
+                   (!isFirstCharacter && character >= '0' && character <= '9') || 
+                   (!isFirstCharacter && character == '_') ||
+                   (character >= 'α' && character <= 'ω') || (character >= 'Α' && character <= 'Ω');
         }
 
         private bool IsUnaryMinus(char currentToken, IList<Token> tokens)
