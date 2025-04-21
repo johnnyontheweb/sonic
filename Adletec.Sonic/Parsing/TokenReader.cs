@@ -271,7 +271,7 @@ namespace Adletec.Sonic.Parsing
                    (character >= 'A' && character <= 'Z') || 
                    (!isFirstCharacter && character >= '0' && character <= '9') || 
                    (!isFirstCharacter && character == '_') ||
-                   (character >= 'α' && character <= 'ω') || (character >= 'Α' && character <= 'Ω');
+                   (character >= 'Α' && character <= 'ϖ');
         }
 
         private bool IsUnaryMinus(char currentToken, IList<Token> tokens)
